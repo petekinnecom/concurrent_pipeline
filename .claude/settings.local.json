@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ruby:*)",
+      "Bash(test_launcher:*)",
+      "Bash(bundle exec ruby:*)"
+    ]
+  }
+}
