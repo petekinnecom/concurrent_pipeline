@@ -114,8 +114,9 @@ module ConcurrentPipeline
         elsif klass_or_symbol.is_a?(Symbol)
           registry.register(klass_or_symbol, Class.new do
             extend Model
-            instance_eval(&block)
+            class_exec(&block)
           end)
+
         else
           raise ArgumentError.new("Must provide either a class or a symbol")
         end

@@ -191,6 +191,25 @@ module ConcurrentPipeline
         end
       end
 
+      class Streamer
+        extend PipeActor
+
+        attr_reader :stream
+        def initialize(stream:)
+          @stream = stream
+        end
+
+        on :stream do |msg|
+          stream.push(*msg.payload)
+        end
+      end
+
+      StreamWrapper = Struct.new(:dispatch, keyword_init: true) do
+        def push(*args)
+          dispatch.tell(Msg.(:stream, args))
+        end
+      end
+
       class Scheduler
         extend PipeActor
 
@@ -264,13 +283,18 @@ module ConcurrentPipeline
       class Dispatch
         extend PipeActor
 
-        attr_reader :work, :changeset, :scheduler
+        attr_reader :work, :changeset, :scheduler, :streamer
 
         on :init do |msg|
           @work = msg.payload[:work]
           @changeset = msg.payload[:changeset]
           @scheduler = msg.payload[:scheduler]
+          @streamer = msg.payload.fetch(:streamer)
           reply :ok
+        end
+
+        on :stream do |msg|
+          streamer.tell(Msg.(:stream, msg.payload))
         end
 
         on :tick do |msg|
@@ -337,18 +361,20 @@ module ConcurrentPipeline
         ticker = Ticker.spawn(dispatch)
         work = Work.spawn(dispatch)
         changeset = Changeset.spawn(dispatch: dispatch, store: store)
+        streamer = Streamer.spawn(stream: stream)
         scheduler = Scheduler.spawn(
           dispatch: dispatch,
           store: store,
           pipelineables: pipelineables,
-          stream: stream
+          stream: StreamWrapper.new(dispatch: dispatch)
         )
 
         dispatch.tell(Msg.(
           :init,
           work: work,
           changeset: changeset,
-          scheduler: scheduler
+          scheduler: scheduler,
+          streamer: streamer
         ))
 
         Log.debug("triggering initial queue")

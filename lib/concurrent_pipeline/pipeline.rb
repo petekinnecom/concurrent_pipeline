@@ -136,8 +136,8 @@ module ConcurrentPipeline
         pipeline.changeset
       end
 
-      def stream(type, payload)
-        pipeline.stream.push(type, payload)
+      def stream(type, payload = nil)
+        pipeline.stream.push(type, payload = nil)
       end
     end
 
@@ -146,7 +146,7 @@ module ConcurrentPipeline
 
       def build_pipelines(store:, stream:, pool:)
         if target_type
-          store.all(target_type).map { |record|
+          @target_proc.call(store).map { |record|
             Wrapper.new(
               pipeline: new(
                 target: record,
@@ -170,8 +170,15 @@ module ConcurrentPipeline
         end
       end
 
-      def each(type, as: nil)
-        @target_type = type
+      def each(type_or_proc, as: nil)
+        if type_or_proc.is_a?(Symbol)
+          @target_type = type_or_proc
+          @target_proc = ->(store) { store.all(type_or_proc) }
+        elsif type_or_proc.respond_to?(:call)
+          @target_type = :custom
+          @target_proc = type_or_proc
+        end
+
         define_method(as) { target } if as
         define_method(:record) { target }
       end
