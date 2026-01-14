@@ -8,9 +8,17 @@ module ConcurrentPipeline
         async: Processors::Asynchronous,
       }
 
-      Producer = Struct.new(:query, :block) do
+      Step = Struct.new(:value, :queue_size, :label, keyword_init: true)
+      Timer = Data.define(:interval, :block)
+      Stats = Struct.new(:queue_size, :completed, :time, keyword_init: true)
+
+      Producer = Struct.new(:query, :block, :label, keyword_init: true) do
         def call(*a, **p)
           instance_exec(*a, **p, &block)
+        end
+
+        def assert(val)
+          raise Errors::AssertionFailure.new("Post condition failed") unless val
         end
 
         def shell
@@ -20,15 +28,28 @@ module ConcurrentPipeline
         def records(store)
           if query.is_a?(Proc)
             query.call
+          elsif query.is_a?(ActiveRecord::Relation)
+            query.reload.to_a
           else
-            # Query is a hash with record_name and filters
-            store.where(query[:record_name], **query[:filters])
+            raise "Invalid processor query type: #{query.inspect}"
           end
         end
       end
 
       def producers
         @producers ||= []
+      end
+
+      def arounds
+        @arounds ||= []
+      end
+
+      def timers
+        @timers ||= []
+      end
+
+      def before_process_hooks
+        @before_process_hooks ||= []
       end
 
       def processor(type, **attrs)
@@ -38,18 +59,23 @@ module ConcurrentPipeline
       def build_processor(store)
         PROCESSORS
           .fetch(@processor.fetch(:type))
-          .new(store:, producers:, **@processor.fetch(:attrs))
+          .new(store:, producers:, before_process_hooks:, timers:, **@processor.fetch(:attrs))
       end
 
-      def process(query_or_record_name, **filters, &block)
-        if query_or_record_name.is_a?(Proc)
-          # Lambda-based query (current behavior)
-          producers << Producer.new(query: query_or_record_name, block:)
-        else
-          # Record name with filters
-          query = { record_name: query_or_record_name, filters: }
-          producers << Producer.new(query:, block:)
-        end
+      def process(query, label: nil, &block)
+        producers << Producer.new(query:, block:, label:)
+      end
+
+      def around(&block)
+        arounds << block
+      end
+
+      def before_process(&block)
+        before_process_hooks << block
+      end
+
+      def timer(interval, &block)
+        timers << Timer.new(interval:, block:)
       end
     end
   end

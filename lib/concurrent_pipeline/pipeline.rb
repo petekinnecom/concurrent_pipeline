@@ -6,22 +6,18 @@ module ConcurrentPipeline
       schema = Pipelines::Schema.new
       schema.instance_exec(&block)
 
-      new(schema)
+      Class.new(Pipeline) do
+        define_singleton_method(:process) { |store| new(schema).process(store) }
+      end
     end
 
-    attr_reader :schema, :processor
+    attr_reader :schema
     def initialize(schema)
       @schema = schema
-      @processor = nil
     end
 
     def process(store)
-      @processor = schema.build_processor(store)
-      @processor.call
-    end
-
-    def errors
-      @processor&.errors || []
+      schema.build_processor(store).call
     end
   end
 end

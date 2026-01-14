@@ -30,7 +30,9 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency("zeitwerk")
-  spec.add_dependency("yaml")
-  spec.add_dependency("async")
+  spec.add_dependency("zeitwerk", "~> 2.7")
+  spec.add_dependency("yaml", "~> 0.4")
+  spec.add_dependency("async", "~> 2.35")
+  spec.add_dependency("activerecord", "~> 8.0")
+  spec.add_dependency("sqlite3", "~> 2.4")
 end

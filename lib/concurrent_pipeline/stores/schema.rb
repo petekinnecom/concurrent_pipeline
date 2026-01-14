@@ -1,34 +1,72 @@
 module ConcurrentPipeline
   module Stores
     class Schema
-      STORAGE = {
-        yaml: Storage::Yaml
-      }
+      Record = Data.define(:name, :table, :block)
+      Migration = Data.define(:version, :block)
 
-      def build(name, attrs:)
-        records.fetch(name).new(attrs)
-      end
+      class RecordContext
+        attr_reader :schema_instance, :table_name
 
-      def storage(type = nil, **attrs)
-        @storage = STORAGE.fetch(type).new(**attrs) if type
-        @storage
-      end
+        def initialize(schema_instance)
+          @schema_instance = schema_instance
+          @table_name = nil
+        end
 
-      def record(name, &)
-        records[name] = Class.new(Record) do
-          define_singleton_method(:name) { "PipelineRecord.#{name}" }
-          define_singleton_method(:record_name) { name }
+        def schema(table_name, &block)
+          # Store the table name for later use
+          @table_name = table_name
 
-          class_exec(&)
-
-          define_method(:inspect) do
-            "#<#{self.class.name} #{attributes.inspect[0..100]}>"
+          # Prepend schema migrations to front of the line
+          # Wrap the block in a create_table call
+          migration_block = Proc.new do
+            create_table(table_name, &block)
           end
+
+          schema_instance.prepend_migration(table_name, &migration_block)
+        end
+
+        def method_missing(...)
+        end
+
+        def respond_to_missing?(...)
+          true
         end
       end
 
-      def records
-        @records ||= {}
+      attr_reader :migrations, :records
+      def initialize
+        @migrations = []
+        @records = {}
+        @migration_counter = 1
+      end
+
+      def dir(path = nil)
+        @dir = path if path
+        @dir
+      end
+
+      def migrate(version = @migration_counter += 1, &block)
+        migrations << Migration.new(version: version, block: block)
+      end
+
+      def prepend_migration(version, &block)
+        migrations.unshift(Migration.new(version: version, block: block))
+      end
+
+      def record(name, table: nil, &block)
+        # If block is given, execute it in RecordContext to extract schema calls
+        extracted_table = table
+        if block
+          context = RecordContext.new(self)
+          context.instance_exec(&block)
+          extracted_table ||= context.table_name
+        end
+
+        records[name] = Record.new(
+          name: name,
+          table: extracted_table,
+          block: block
+        )
       end
     end
   end

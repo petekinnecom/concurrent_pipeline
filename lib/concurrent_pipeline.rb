@@ -8,7 +8,7 @@ module ConcurrentPipeline
   class Error < StandardError; end
 
   class << self
-    def store(&)
+    def store(type = :yaml, &)
       Store.define(&)
     end
 

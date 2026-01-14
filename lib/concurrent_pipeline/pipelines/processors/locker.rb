@@ -12,15 +12,15 @@ module ConcurrentPipeline
         end
 
         def locked?(producer:, record:)
-          locks.key?([producer, record.class.record_name, record.id])
+          locks.key?([producer, record.class.name, record.id])
         end
 
         def lock(producer:, record:)
-          locks[[producer, record.class.record_name, record.id]] = true
+          locks[[producer, record.class.name, record.id]] = true
         end
 
         def unlock(producer:, record:)
-          locks.delete([producer, record.class.record_name, record.id])
+          locks.delete([producer, record.class.name, record.id])
         end
       end
     end
